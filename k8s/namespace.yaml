@@ -1,0 +1,9 @@
+# Created by the platform operator (your user account with the
+# "AKS Namespace Provisioner" custom role). The service principal cannot create namespaces.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hello-web
+  labels:
+    app.kubernetes.io/part-of: it3200-m9
+    pod-security.kubernetes.io/enforce: restricted

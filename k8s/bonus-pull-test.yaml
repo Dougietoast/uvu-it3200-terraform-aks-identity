@@ -1,0 +1,32 @@
+# Optional bonus: a throwaway Pod that always re-pulls the image from ACR,
+# so it fails if the kubelet identity has lost AcrPull.
+#   envsubst '${ACR_LOGIN_SERVER}' < k8s/bonus-pull-test.yaml | kubectl apply -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pull-test
+  namespace: hello-web
+  labels:
+    app: pull-test
+spec:
+  automountServiceAccountToken: false
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    seccompProfile:
+      type: RuntimeDefault
+  containers:
+    - name: web
+      image: ${ACR_LOGIN_SERVER}/hello-web:v1
+      imagePullPolicy: Always
+      securityContext:
+        allowPrivilegeEscalation: false
+        capabilities:
+          drop: ["ALL"]
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          cpu: 50m
+          memory: 64Mi

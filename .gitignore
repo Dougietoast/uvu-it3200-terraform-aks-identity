@@ -1,0 +1,39 @@
+# Terraform local state and cache (state contains the SP client secret)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+tfplan
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+.terraformrc
+terraform.rc
+
+# Variable files with real values (keep the example)
+*.tfvars
+*.tfvars.json
+!terraform.tfvars.example
+
+# Kubernetes credentials and local env files
+*.kubeconfig
+kubeconfig*
+.kube/
+.env
+.env.*
+.azure-sp/
+
+# Keys and certs
+*.pem
+*.key
+*.pfx
+*.p12
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

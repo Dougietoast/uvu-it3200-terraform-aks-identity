@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>IT 3200 M9 - hello-web</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 40rem; margin: 4rem auto; padding: 0 1rem; line-height: 1.5; }
+    code { background: #eee; padding: .1rem .3rem; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>hello-web is running on AKS</h1>
+  <p>This page is served from an image stored in a <strong>private Azure Container Registry</strong>.</p>
+  <p>The AKS kubelet managed identity pulled it using an <code>AcrPull</code> role assignment managed by Terraform.</p>
+  <p>Deployed by a Microsoft Entra service principal with <code>Azure Kubernetes Service RBAC Writer</code> scoped to one namespace.</p>
+  <p><small>IT 3200 &middot; Utah Valley University &middot; Douglas</small></p>
+</body>
+</html>

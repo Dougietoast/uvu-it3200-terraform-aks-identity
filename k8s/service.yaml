@@ -1,0 +1,17 @@
+# ClusterIP only: nothing is exposed to the internet. Access with
+#   kubectl port-forward -n hello-web svc/hello-web 8080:80
+apiVersion: v1
+kind: Service
+metadata:
+  name: hello-web
+  namespace: hello-web
+  labels:
+    app: hello-web
+spec:
+  type: ClusterIP
+  selector:
+    app: hello-web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

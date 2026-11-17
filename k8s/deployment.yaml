@@ -1,0 +1,51 @@
+# ${ACR_LOGIN_SERVER} is filled in at apply time:
+#   export ACR_LOGIN_SERVER=$(terraform output -raw acr_login_server)
+#   envsubst '${ACR_LOGIN_SERVER}' < k8s/deployment.yaml | kubectl apply -f -
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: hello-web
+  namespace: hello-web
+  labels:
+    app: hello-web
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: hello-web
+  template:
+    metadata:
+      labels:
+        app: hello-web
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: web
+          image: ${ACR_LOGIN_SERVER}/hello-web:v1
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          resources:
+            requests:
+              cpu: 25m
+              memory: 32Mi
+            limits:
+              cpu: 100m
+              memory: 64Mi
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          livenessProbe:
+            httpGet:
+              path: /
+              port: http

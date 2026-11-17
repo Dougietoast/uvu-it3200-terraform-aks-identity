@@ -1,0 +1,17 @@
+# Copy to terraform.tfvars (gitignored) and fill in.
+#   cp terraform.tfvars.example terraform.tfvars
+
+subscription_id = "00000000-0000-0000-0000-000000000000" # az account show --query id -o tsv
+student_name    = "douglas"
+location        = "westus2"
+
+# If acruvuit3200<student_name> is taken globally, add a short suffix:
+# acr_name_suffix = "01"
+
+# If the VM size is unavailable or over quota in your region, try another, e.g.
+# node_vm_size = "Standard_B2s"
+
+# Walk these forward as you go through the assignment (see README):
+sp_access_stage          = "none" # none -> credentials -> deployer
+operator_access_enabled  = false  # true in Part 6
+kubelet_acr_pull_enabled = true   # false only for the bonus break/fix
