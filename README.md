@@ -28,7 +28,8 @@ outputs.tf               non-sensitive IDs (+ the secret, marked sensitive)
 terraform.tfvars.example copy to terraform.tfvars (gitignored)
 app/                     Dockerfile + index.html for the test image
 k8s/                     namespace, deployment, service, bonus pull-test pod
-scripts/                 sp-session.sh / user-session.sh to keep the two identities separate
+scripts/                 sp-session.sh / user-session.sh keep the two identities separate;
+                         create-github-repo.sh creates and pushes the GitHub repo
 docs/                    architecture, identities, troubleshooting, test results
 ```
 
@@ -47,6 +48,8 @@ terraform version && az version -o table && kubectl version --client && kubelogi
 
 You need an Azure subscription where you can create AKS/ACR, **register Entra applications**, and **create role assignments** (Owner on the subscription and permission to register apps in the tenant).
 
+> **Node size:** the default is `Standard_D2als_v7`. New pay-as-you-go subscriptions have two separate limits: VM-family **quota** (`az vm list-usage -l westus2 -o table`), and an AKS **allowed-size list** (when AKS rejects a size, its error message lists the sizes that are allowed). `Standard_B2s`, `Standard_D2s_v3` and `Standard_D2s_v5` all failed on one of these. Pick a size that passes both and set `node_vm_size`.
+
 > Cost: a 1-node AKS cluster on the Free tier plus a Basic registry is on the order of 10–20 cents an hour while running (node VM, load balancer + public IP, disk, registry). Check the Azure pricing calculator for your region, do the lab in one sitting, and run `terraform destroy` at the end.
 
 ---
@@ -63,6 +66,14 @@ The access variables in `terraform.tfvars` let you move through the assignment i
 | D | `deployer` | `true` | SP reads the cluster and deploys into `hello-web` only |
 
 Use **two terminal tabs**: one for your personal account (runs Terraform), one for the service principal. The session scripts keep their Azure CLI profiles and kubeconfigs apart so you never accidentally test with the wrong identity.
+
+> **Run Terraform only in the personal tab.** Terraform signs in with the tab's Azure CLI login. In the SP tab it fails with `subscription ID … is not known by Azure CLI`, and its plan tries to make the SP the owner of its own app registration.
+>
+> **Never interrupt an apply** or pipe it through `tail`, which hides progress for the 5–10 minutes AKS takes. If an apply is interrupted while creating the cluster, Azure keeps building it. Wait for it, then import it instead of rebuilding:
+> ```bash
+> az aks wait -g rg-uvu-it3200-<student> -n aks-uvu-it3200-<student> --created --interval 30 --timeout 1200
+> terraform import azurerm_kubernetes_cluster.aks "/subscriptions/$(az account show --query id -o tsv)/resourceGroups/rg-uvu-it3200-<student>/providers/Microsoft.ContainerService/managedClusters/aks-uvu-it3200-<student>"
+> ```
 
 ### 1. Deploy the infrastructure (Part 1)
 
@@ -140,7 +151,9 @@ az rest --method post \
   --url "https://management.azure.com${AKS_ID}/listClusterUserCredential?api-version=2024-05-01"
 ```
 
-**Expected:** login and token succeed; `listClusterUserCredential` fails with `AuthorizationFailed`. Authentication worked, authorization did not.
+**Expected:** login and token succeed; `listClusterUserCredential` fails with `Subscription '<id>' not found`. With no role anywhere in the subscription, Azure answers "not found" instead of "forbidden", so it doesn't reveal that the subscription exists. Authentication worked, authorization did not.
+
+`az account show -o table` hides any column named `type`, so to see `servicePrincipal` use `--query "{user:user.name, kind:user.type}"`.
 
 ### 4. Stage B: Cluster User role only (Part 4, Troubleshooting Challenge)
 
@@ -160,8 +173,11 @@ az account set --subscription "$AZURE_SUBSCRIPTION_ID"
 # Step 2: get the user kubeconfig (no --admin: local accounts are disabled)
 az aks get-credentials -g "$RG" -n "$AKS" --file "$KUBECONFIG" --overwrite-existing
 
-# Step 3: switch kubeconfig to service principal login; kubelogin reads AZURE_CLIENT_ID / AZURE_CLIENT_SECRET
-kubelogin convert-kubeconfig -l spn
+# Step 3: switch kubeconfig to service principal login.
+# Newer Azure CLI versions auto-convert the kubeconfig to azurecli mode, which drops the tenant ID,
+# so pass both IDs. The secret stays in AZURE_CLIENT_SECRET and is never written to the kubeconfig.
+kubelogin convert-kubeconfig -l spn --client-id "$AZURE_CLIENT_ID" --tenant-id "$AZURE_TENANT_ID"
+kubectl config view --minify -o jsonpath='{.users[0].user.exec.args}'; echo   # --login spn, no secret
 
 # Step 4: test
 kubectl auth whoami            # Kubernetes sees the SP identity -> authentication works
@@ -173,6 +189,8 @@ kubectl auth can-i list pods -n hello-web
 ```
 
 **Expected:** `auth whoami` shows the SP; everything else is `Forbidden` / `no`. The SP is valid. It is missing Kubernetes authorization. The Cluster User role only allows downloading the kubeconfig.
+
+To prove kubectl uses the SP's own secret and not the Azure CLI session, run `az logout`. `kubectl auth whoami` keeps working.
 
 ### 5. Stage C: compare with your personal account (Part 6)
 
@@ -214,6 +232,7 @@ kubectl auth can-i create deployments -n hello-web   # yes
 kubectl auth can-i create deployments -n default     # no
 kubectl auth can-i get secrets -n kube-system        # no
 kubectl auth can-i create namespaces                 # no
+kubectl auth can-i delete namespaces/hello-web       # no
 ```
 
 ### 7. Deploy the app from ACR (Part 7)
@@ -233,7 +252,13 @@ kubectl port-forward -n hello-web svc/hello-web 8080:80
 # open http://localhost:8080 in the Windows browser, Ctrl+C to stop
 ```
 
-For the comparison table, try the same deploy from the personal tab: it is `Forbidden` because the operator has no write access to `hello-web`.
+For the comparison table, try a deploy from the personal tab. It is `Forbidden` because the operator has no write access to `hello-web`:
+
+```bash
+kubectl create deployment deny-test --image="$ACR_LOGIN_SERVER/hello-web:v1" -n hello-web --dry-run=server
+```
+
+Don't use `kubectl apply --dry-run=server` for this test. When the deployment already exists unchanged, `apply` only reads it, sends no write, and prints `unchanged` even for an identity that can't deploy.
 
 ### 8. Optional bonus: break and fix image pulls
 
@@ -304,4 +329,16 @@ Record results in [docs/testing-results.md](docs/testing-results.md).
 
 ## AI assistance
 
-_Document the AI tools, prompts, and how you verified the output here (required by the assignment)._
+I used Claude (Anthropic). I gave it the full assignment text and asked for help completing it. It drafted the Terraform, manifests, scripts and docs, then walked me through each stage as I pasted back output.
+
+How I validated it:
+- `terraform fmt`, `validate` and `plan` before every apply, checking the expected add/change/destroy counts
+- role choices checked against Microsoft's built-in role definitions
+- every permission claim tested with real commands and `kubectl auth can-i`
+
+AI suggestions that were wrong and got fixed through testing:
+- default VM sizes (B2s, D2s_v3, D2s_v5) unusable on a new subscription
+- `kubelogin convert-kubeconfig -l spn` missing `--client-id` and `--tenant-id`
+- piping `apply` into `tail` hid progress, which led to an interrupted apply and a `terraform import`
+- a `kubectl auth can-i` syntax error (`namespace hello-web` instead of `namespaces/hello-web`)
+- a "personal account can't deploy" test that never attempted a write

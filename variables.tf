@@ -32,9 +32,9 @@ variable "location" {
 }
 
 variable "node_vm_size" {
-  description = "VM size for the single system node. Needs at least 2 vCPU / 4 GiB."
+  description = "VM size for the single system node. Needs at least 2 vCPU / 4 GiB, family quota, and AKS's allowed-size list for the subscription."
   type        = string
-  default     = "Standard_D2s_v5"
+  default     = "Standard_D2als_v7"
 }
 
 variable "node_count" {
